@@ -1,6 +1,6 @@
-# Example from the brief (N=1)
+# Example from the problem statement (N = 1).
 n 1
 turn A B A
-A lift 1
-B lift 1
-A place 3
+move A lift 1
+move B lift 1
+move A place 3

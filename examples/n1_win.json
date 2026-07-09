@@ -2,8 +2,8 @@
   "n": 1,
   "turn_order": ["A", "B", "A"],
   "moves": [
-    {"action": "lift", "pole": 1},
-    {"action": "lift", "pole": 1},
-    {"action": "place", "pole": 3}
+    {"player": "A", "action": "lift 1"},
+    {"player": "B", "action": "lift 1"},
+    {"player": "A", "action": "place 3"}
   ]
 }
