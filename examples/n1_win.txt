@@ -1,0 +1,6 @@
+# Example from the brief (N=1)
+n 1
+turn A B A
+A lift 1
+B lift 1
+A place 3
