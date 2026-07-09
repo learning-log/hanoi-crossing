@@ -8,10 +8,10 @@ from typing import Any
 
 from hanoi_crossing.actions import Action, parse_action, parse_player
 from hanoi_crossing.engine import HanoiCrossingEngine
-from hanoi_crossing.models import BoardState, Observation, PlayerId, StepTrace
+from hanoi_crossing.models import BoardSnapshot, Observation, PlayerId, StepTrace
 
 
-def format_board(state: BoardState) -> str:
+def format_board(state: BoardSnapshot) -> str:
     lines = ["Board:"]
     for pole in ("1a", "2", "3a", "1b", "3b"):
         disks = state.poles.get(pole, [])
@@ -27,7 +27,7 @@ def format_observation(obs: Observation) -> str:
     return f"Player {obs.player}: poles [{pole_bits}], hand={hand}"
 
 
-def state_to_dict(state: BoardState) -> dict[str, Any]:
+def state_to_dict(state: BoardSnapshot) -> dict[str, Any]:
     return {
         "poles": {k: list(v) for k, v in state.poles.items()},
         "hands": dict(state.hands),

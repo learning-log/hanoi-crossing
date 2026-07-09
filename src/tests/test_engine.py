@@ -40,9 +40,9 @@ def test_example_win_n1():
     assert winner == "A"
     assert engine.done
     assert engine.state.hands["A"] is None
-    assert engine.state.poles["1a"] == []
-    assert engine.state.poles["2"] == []
-    assert engine.state.poles["3a"] == [1]
+    assert engine.state.poles["1a"] == ()
+    assert engine.state.poles["2"] == ()
+    assert engine.state.poles["3a"] == (1,)
 
 
 def test_illegal_place_wastes_turn():
@@ -52,7 +52,7 @@ def test_illegal_place_wastes_turn():
     assert not result.valid
     assert result.reason == "illegal action"
     assert engine.turn_index == 1
-    assert engine.state.poles["1a"] == [1]
+    assert engine.state.poles["1a"] == (1,)
 
 
 def test_lift_while_holding_is_illegal():
@@ -81,7 +81,7 @@ def test_b_can_lift_from_shared_pole():
 
     assert result.valid
     assert engine.state.hands["B"] == 1
-    assert engine.state.poles["2"] == []
+    assert engine.state.poles["2"] == ()
 
 
 def test_legal_actions_include_skip():
@@ -134,7 +134,7 @@ def test_place_on_pole3_requires_larger_top_disk():
     result = engine.step("A", Action(ActionKind.PLACE, "3"))  # cannot place 3 on 1
 
     assert not result.valid
-    assert engine.state.poles["3a"] == [1]
+    assert engine.state.poles["3a"] == (1,)
 
 
 def test_engine_rejects_invalid_n():
@@ -180,3 +180,26 @@ def test_simultaneous_win_tiebreak_credits_acting_player():
 
     assert engine.winner == "A"
     assert engine.done
+
+
+def test_observation_poles_are_immutable():
+    engine = HanoiCrossingEngine(1)
+    obs = engine.observe("A")
+    with pytest.raises(TypeError):
+        obs.poles["1"] = ()  # type: ignore[index]
+
+
+def test_board_snapshot_is_immutable():
+    engine = HanoiCrossingEngine(1)
+    snap = engine.state
+    with pytest.raises(TypeError):
+        snap.poles["1a"] = ()  # type: ignore[index]
+
+
+def test_state_snapshot_cached_until_mutation():
+    engine = HanoiCrossingEngine(1, turn_order=["A", "B"])
+    s1 = engine.state
+    s2 = engine.state
+    assert s1 is s2
+    engine.step("A", Action(ActionKind.LIFT, "1"))
+    assert engine.state is not s1

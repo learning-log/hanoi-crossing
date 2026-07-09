@@ -7,11 +7,13 @@ from typing import Sequence
 from hanoi_crossing.actions import Action, ActionKind
 from hanoi_crossing.models import (
     POLE_KEYS,
+    BoardSnapshot,
     BoardState,
     Observation,
     PoleView,
     PlayerId,
     StepResult,
+    frozen_mapping,
 )
 
 
@@ -87,10 +89,16 @@ class HanoiCrossingEngine:
         self._state = state.copy() if state is not None else BoardState(poles=_initial_poles(n))
         self._done = False
         self._winner: PlayerId | None = None
+        self._snapshot_cache: BoardSnapshot | None = None
 
     @property
-    def state(self) -> BoardState:
-        return self._state.copy()
+    def state(self) -> BoardSnapshot:
+        if self._snapshot_cache is None:
+            self._snapshot_cache = self._state.to_snapshot()
+        return self._snapshot_cache
+
+    def _invalidate_snapshot(self) -> None:
+        self._snapshot_cache = None
 
     @property
     def done(self) -> bool:
@@ -115,11 +123,15 @@ class HanoiCrossingEngine:
         return self._turn_order[self._turn_index]
 
     def observe(self, player: PlayerId) -> Observation:
-        poles: dict[PoleView, tuple[int, ...]] = {}
-        for view in _visible_poles(player):
-            key = _pole_key(player, view)
-            poles[view] = tuple(self._state.poles[key])
-        return Observation(player=player, poles=poles, hand=self._state.hands[player])
+        poles = {
+            view: tuple(self._state.poles[_pole_key(player, view)])
+            for view in _visible_poles(player)
+        }
+        return Observation(
+            player=player,
+            poles=frozen_mapping(poles),
+            hand=self._state.hands[player],
+        )
 
     def legal_actions(self, player: PlayerId) -> list[Action]:
         actions: list[Action] = [Action(ActionKind.SKIP)]
@@ -213,6 +225,7 @@ class HanoiCrossingEngine:
             assert disk is not None
             self._state.poles[key].append(disk)
             self._state.hands[player] = None
+        self._invalidate_snapshot()
 
     def _advance_turn(self) -> None:
         if self._turn_order:

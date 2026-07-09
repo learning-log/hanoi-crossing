@@ -58,7 +58,9 @@ Players never observe the opponent's private poles or the opponent's hand.
 
 Agents receive **only** an `Observation` and legal action list — not the engine
 handle. `EpisodeRunner` orchestrates observe → act → step. Full board state
-(`engine.state`) is for logging and tests only.
+(`engine.state`) returns an immutable `BoardSnapshot` for logging and tests only.
+`Observation` and `BoardSnapshot` use read-only mappings — see
+[design.md §3.4](design.md#34-value-objects-dataclasses) for immutability details.
 
 Turn order is always supplied externally; the engine never assumes alternating
 A/B play.
@@ -100,7 +102,7 @@ to disable).
 ```
 src/hanoi_crossing/
   actions.py        # Action, ActionKind, parsers
-  models.py         # BoardState, Observation, StepResult, StepTrace
+  models.py         # BoardState, BoardSnapshot, Observation, StepResult, StepTrace
   engine.py         # HanoiCrossingEngine
   agents.py         # Agent protocol, RandomAgent, ScriptedAgent
   runner.py         # EpisodeRunner, validate_replay

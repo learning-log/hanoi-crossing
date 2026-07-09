@@ -106,13 +106,16 @@ while the runner adds traces for eval harnesses.
 | Type | Frozen? | Role |
 |------|---------|------|
 | `Action` | yes | Lift / place / skip with local pole view |
-| `Observation` | yes | Player-local partial view |
+| `Observation` | yes | Player-local partial view (`MappingProxyType` poles) |
 | `StepResult` | yes | Outcome of one `step` call |
 | `StepTrace` | yes | One decision point for eval logs |
-| `BoardState` | no (mutable copy) | Full-board snapshot for engine internals |
+| `BoardSnapshot` | yes | Immutable full-board read API (`engine.state`) |
+| `BoardState` | no | Mutable engine-internal working state |
 
-`BoardState` is mutable inside the engine; external access is via `engine.state`
-which returns a **copy**.
+`BoardState` is mutable inside the engine only. External access is via
+`engine.state`, which returns a frozen `BoardSnapshot` (tuple pole stacks
+wrapped in `MappingProxyType`). The snapshot is built lazily on first access
+after each mutation and cached until the next board change.
 
 ### 3.5 Player-relative pole indirection
 
@@ -281,7 +284,7 @@ Traces enable audit of eval harnesses and replay debugging. Enable via
 ```text
 src/hanoi_crossing/
   actions.py       # Action, ActionKind, parsers
-  models.py        # BoardState, Observation, StepResult, StepTrace
+  models.py        # BoardState, BoardSnapshot, Observation, StepResult, StepTrace
   engine.py        # HanoiCrossingEngine
   agents.py        # Agent protocol, RandomAgent, ScriptedAgent
   runner.py        # EpisodeRunner, validate_replay
@@ -333,12 +336,13 @@ Requires **Python 3.13+** and [uv](https://docs.astral.sh/uv/).
 
 ## 12. Known gaps / follow-ups
 
-- `pyproject.toml` registers `hanoi-crossing = hanoi_crossing.cli:main` but
-  `cli/__init__.py` has no `main` — use module CLIs above or add a dispatcher.
-- README quick-start commands are partially stale relative to current layout.
 - Wrong-player handling is soft-fail; could be raised for stricter API contracts.
 - Property-based invariant tests (disk conservation, stack monotonicity) not yet
   implemented.
+- **Snapshot cost**: first `engine.state` access after each mutation builds an
+  O(poles) tuple snapshot; cached until the next mutation. `observe()` allocates
+  a small per-call player view (acceptable for PoC; note for high-throughput
+  serving).
 
 ## 13. AI disclosure
 

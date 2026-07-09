@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 if TYPE_CHECKING:
     from hanoi_crossing.actions import Action
@@ -14,6 +16,9 @@ PoleView = Literal["1", "2", "3"]
 PLAYER_A: PlayerId = "A"
 PLAYER_B: PlayerId = "B"
 
+K = TypeVar("K")
+V = TypeVar("V")
+
 # Player-relative pole labels map to internal pole keys on the full board.
 POLE_KEYS: dict[PlayerId, dict[PoleView, str]] = {
     "A": {"1": "1a", "2": "2", "3": "3a"},
@@ -21,13 +26,26 @@ POLE_KEYS: dict[PlayerId, dict[PoleView, str]] = {
 }
 
 
+def frozen_mapping(d: dict[K, V]) -> Mapping[K, V]:
+    """Return a read-only view over a dict (stdlib MappingProxyType)."""
+    return MappingProxyType(d)
+
+
 @dataclass(frozen=True)
 class Observation:
     """What a single player can see before choosing an action."""
 
     player: PlayerId
-    poles: dict[PoleView, tuple[int, ...]]
+    poles: Mapping[PoleView, tuple[int, ...]]
     hand: int | None
+
+
+@dataclass(frozen=True)
+class BoardSnapshot:
+    """Immutable read-only view of the full board for logging and tests."""
+
+    poles: Mapping[str, tuple[int, ...]]
+    hands: Mapping[PlayerId, int | None]
 
 
 @dataclass(frozen=True)
@@ -63,7 +81,7 @@ class StepTrace:
 
 @dataclass
 class BoardState:
-    """Authoritative full-board snapshot (both players' private poles included)."""
+    """Authoritative mutable full-board state (engine internal use only)."""
 
     poles: dict[str, list[int]] = field(default_factory=dict)
     hands: dict[PlayerId, int | None] = field(
@@ -74,4 +92,10 @@ class BoardState:
         return BoardState(
             poles={k: list(v) for k, v in self.poles.items()},
             hands=dict(self.hands),
+        )
+
+    def to_snapshot(self) -> BoardSnapshot:
+        return BoardSnapshot(
+            poles=frozen_mapping({k: tuple(v) for k, v in self.poles.items()}),
+            hands=frozen_mapping(dict(self.hands)),
         )
