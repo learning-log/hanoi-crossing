@@ -30,6 +30,11 @@ def test_validate_replay_rejects_extra_moves():
         validate_replay(["A"], [("A", Action(ActionKind.SKIP)), ("B", Action(ActionKind.SKIP))])
 
 
+def test_validate_replay_rejects_fewer_moves():
+    with pytest.raises(ReplayValidationError, match="fewer move"):
+        validate_replay(["A", "B"], [("A", Action(ActionKind.SKIP))])
+
+
 def test_episode_runner_collects_trace():
     engine = HanoiCrossingEngine(1, turn_order=["A", "B", "A"])
     runner = EpisodeRunner(engine)
@@ -127,7 +132,7 @@ def test_run_scripted_stops_after_winner():
 
 
 def test_step_after_game_over_is_rejected():
-    engine = HanoiCrossingEngine(1, turn_order=["A", "B", "A", "A"])
+    engine = HanoiCrossingEngine(1, turn_order=["A", "B", "A"])
     runner = EpisodeRunner(engine)
     runner.run_scripted(
         [

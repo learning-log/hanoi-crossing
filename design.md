@@ -235,8 +235,8 @@ are the bridge to a future HTTP/WebSocket service API.
 ### 6.1 Validation
 
 `validate_replay(turn_order, moves)` ensures each `(player, action)` pair matches
-the external turn schedule. Raises `ReplayValidationError` on mismatch or extra
-moves.
+the external turn schedule and that move count equals turn-order length. Raises
+`ReplayValidationError` on player mismatch, extra moves, or truncated replays.
 
 `EpisodeRunner.run_scripted(..., strict=True)` validates before stepping.
 Replay CLI uses strict mode by default (`--no-strict` to disable).

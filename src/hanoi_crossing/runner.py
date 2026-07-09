@@ -34,6 +34,11 @@ def validate_replay(
         raise ReplayValidationError(
             f"replay has {extra} more move(s) than entries in turn order"
         )
+    if len(moves) < len(turn_order):
+        missing = len(turn_order) - len(moves)
+        raise ReplayValidationError(
+            f"replay has {missing} fewer move(s) than entries in turn order"
+        )
 
 
 @dataclass
