@@ -7,9 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from hanoi_crossing import Action, ActionKind, Game, Player
+from hanoi_crossing import Action, ActionKind, Game, Player, RandomAgent, ScriptedAgent
 from hanoi_crossing.cli import run_random, run_replay, run_replay_file
 from hanoi_crossing.engine import parse_action
+from hanoi_crossing.runner import EpisodeRunner
 
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
@@ -100,12 +101,38 @@ class TestRandomPlay:
     game = run_random(2, max_turns=50, seed=0)
     assert game.turn_index > 0
 
+  def test_random_agent_picks_legal_action(self) -> None:
+    game = Game(1, ["A"])
+    agent = RandomAgent(seed=0)
+    action = agent.act(game)
+    assert action in game.legal_actions()
+
   def test_uses_only_legal_moves(self) -> None:
     game = Game(2, ["A"] * 20)
     for _ in range(20):
       action = game.legal_actions()[0]
       assert game.is_legal(action)
       game.step(action)
+
+
+class TestAgentsAndRunner:
+  def test_scripted_agent_returns_moves_in_order(self) -> None:
+    moves = [Action(ActionKind.LIFT, 1), Action(ActionKind.SKIP)]
+    agent = ScriptedAgent(moves)
+    game = Game(1, ["A", "A"])
+    assert agent.act(game) == moves[0]
+    assert agent.act(game) == moves[1]
+
+  def test_episode_runner_with_scripted_agent(self) -> None:
+    moves = [
+      Action(ActionKind.LIFT, 1),
+      Action(ActionKind.LIFT, 1),
+      Action(ActionKind.PLACE, 3),
+    ]
+    game = Game(1, [Player.A, Player.B, Player.A])
+    runner = EpisodeRunner.with_shared_agent(game, ScriptedAgent(moves))
+    result = runner.run()
+    assert result.winner == Player.A
 
 
 class TestParseAction:

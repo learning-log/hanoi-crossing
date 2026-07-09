@@ -104,9 +104,13 @@ external agent would — no engine shortcuts.
 
 ```
 src/hanoi_crossing/
-  types.py    # Player, Action, pole maps
-  engine.py   # Game rules and stepping
-  cli.py      # replay + random frontends
+  types.py      # Player, Action, pole maps
+  engine.py     # Game rules and stepping
+  agents.py     # RandomAgent, ScriptedAgent, Agent (stub)
+  runner.py     # EpisodeRunner orchestration
+  cli/
+    replay_cli.py   # replay frontend
+    random_cli.py   # random-play frontend
 tests/
 examples/
 ```
