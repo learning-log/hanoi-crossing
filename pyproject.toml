@@ -1,0 +1,20 @@
+[project]
+name = "hanoi-crossing"
+version = "0.1.0"
+description = "Two-player Tower of Hanoi variant with a shared middle pole"
+readme = "README.md"
+authors = [
+    { email = "surajsamant1414@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+hanoi-crossing = "hanoi_crossing.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
