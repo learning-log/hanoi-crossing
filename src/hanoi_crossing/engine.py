@@ -2,189 +2,208 @@
 
 from __future__ import annotations
 
-import copy
-from typing import Any, Optional
+from typing import Sequence
 
-from hanoi_crossing.types import (
-    ALL_POLE_IDS,
-    POLE_MAP,
-    Action,
-    ActionKind,
-    Player,
+from hanoi_crossing.actions import Action, ActionKind
+from hanoi_crossing.models import (
+    POLE_KEYS,
+    BoardState,
+    Observation,
+    PoleView,
+    PlayerId,
     StepResult,
 )
 
 
-def _initial_pole_stacks(n: int) -> dict[str, list[int]]:
-  """Build starting stacks: odds on 1a, evens on 1b, shared pole empty."""
-  odds = [2 * i - 1 for i in range(n, 0, -1)]
-  evens = [2 * i for i in range(n, 0, -1)]
-  return {
-    "1a": odds,
-    "2": [],
-    "3a": [],
-    "1b": evens,
-    "3b": [],
-  }
-
-
-class Game:
-  """Turn-based Hanoi Crossing environment.
-
-  Designed as a reusable core: agents call ``legal_actions`` and ``step``;
-  frontends and RL loops supply turn order externally.
-  """
-
-  def __init__(self, n: int, turn_order: list[Player | str]) -> None:
-    if n < 1:
-      raise ValueError("n must be >= 1")
-    self.n = n
-    self.turn_order = [Player(p) for p in turn_order]
-    self.turn_index = 0
-    self.poles: dict[str, list[int]] = _initial_pole_stacks(n)
-    self.hands: dict[Player, Optional[int]] = {Player.A: None, Player.B: None}
-    self.winner: Optional[Player] = None
-
-  # -- queries ----------------------------------------------------------------
-
-  @property
-  def done(self) -> bool:
-    return self.winner is not None
-
-  def current_player(self) -> Player:
-    if not self.turn_order:
-      raise RuntimeError("empty turn_order")
-    idx = min(self.turn_index, len(self.turn_order) - 1)
-    return self.turn_order[idx]
-
-  def has_more_turns(self) -> bool:
-    return self.turn_index < len(self.turn_order) and not self.done
-
-  def visible_pole_ids(self, player: Player) -> tuple[str, str, str]:
-    mapping = POLE_MAP[player]
-    return mapping[1], mapping[2], mapping[3]
-
-  def observation(self, player: Player) -> dict[str, Any]:
-    """Player-local view: own poles, shared pole, own hand. Opponent hand hidden."""
-    p1, p2, p3 = self.visible_pole_ids(player)
+def _initial_poles(n: int) -> dict[str, list[int]]:
+    odds = list(range(2 * n - 1, 0, -2))  # largest odd on bottom
+    evens = list(range(2 * n, 0, -2))
     return {
-      "player": player.value,
-      "poles": {
-        1: list(self.poles[p1]),
-        2: list(self.poles[p2]),
-        3: list(self.poles[p3]),
-      },
-      "hand": self.hands[player],
+        "1a": odds,
+        "1b": evens,
+        "2": [],
+        "3a": [],
+        "3b": [],
     }
 
-  def snapshot(self) -> dict[str, Any]:
-    """Full state for replay output and debugging."""
-    return {
-      "n": self.n,
-      "poles": {pid: list(stack) for pid, stack in self.poles.items()},
-      "hands": {p.value: self.hands[p] for p in Player},
-      "turn_index": self.turn_index,
-      "winner": self.winner.value if self.winner else None,
-    }
 
-  def clone(self) -> Game:
-    """Deep copy for search / RL rollouts."""
-    other = Game(self.n, self.turn_order)
-    other.turn_index = self.turn_index
-    other.poles = copy.deepcopy(self.poles)
-    other.hands = dict(self.hands)
-    other.winner = self.winner
-    return other
+def _visible_poles(player: PlayerId) -> tuple[PoleView, ...]:
+    return ("1", "2", "3")
 
-  # -- rules ------------------------------------------------------------------
 
-  def _can_place(self, disk: int, pole_id: str) -> bool:
-    stack = self.poles[pole_id]
-    return not stack or stack[-1] > disk
+def _pole_key(player: PlayerId, view: PoleView) -> str:
+    return POLE_KEYS[player][view]
 
-  def _check_winner(self) -> Optional[Player]:
-    for player in Player:
-      if self.hands[player] is not None:
-        continue
-      p1, p2, p3 = self.visible_pole_ids(player)
-      if self.poles[p1] or self.poles[p2]:
-        continue
-      if self.poles[p3]:
-        return player
-    return None
 
-  def legal_actions(self, player: Optional[Player] = None) -> list[Action]:
-    player = player or self.current_player()
-    actions: list[Action] = [Action(ActionKind.SKIP)]
-    mapping = POLE_MAP[player]
-    hand = self.hands[player]
+def _can_place(disk: int, pole: list[int]) -> bool:
+    return not pole or pole[-1] > disk
 
-    if hand is None:
-      for local in (1, 2, 3):
-        if self.poles[mapping[local]]:
-          actions.append(Action(ActionKind.LIFT, local))
-    else:
-      for local in (1, 2, 3):
-        if self._can_place(hand, mapping[local]):
-          actions.append(Action(ActionKind.PLACE, local))
-    return actions
 
-  def is_legal(self, action: Action, player: Optional[Player] = None) -> bool:
-    return action in self.legal_actions(player)
-
-  # -- stepping ---------------------------------------------------------------
-
-  def step(self, action: Action, *, player: Optional[Player] = None) -> StepResult:
-    """Apply one action for the current turn. Illegal moves waste the turn."""
-    if self.done:
-      return StepResult(legal=False, done=True, winner=self.winner)
-
-    if not self.has_more_turns():
-      return StepResult(legal=False, done=self.done, winner=self.winner)
-
-    actor = player or self.current_player()
-    if actor != self.current_player():
-      self.turn_index += 1
-      return StepResult(legal=False, done=False, winner=None)
-
-    legal = self._apply(actor, action)
-    if legal:
-      self.winner = self._check_winner()
-
-    self.turn_index += 1
-    return StepResult(legal=legal, done=self.done, winner=self.winner)
-
-  def _apply(self, player: Player, action: Action) -> bool:
-    if action.kind == ActionKind.SKIP:
-      return True
-
-    if action.pole not in (1, 2, 3):
-      return False
-
-    pole_id = POLE_MAP[player][action.pole]
-
-    if action.kind == ActionKind.LIFT:
-      if self.hands[player] is not None or not self.poles[pole_id]:
+def _check_win(state: BoardState, player: PlayerId) -> bool:
+    if state.hands[player] is not None:
         return False
-      self.hands[player] = self.poles[pole_id].pop()
-      return True
-
-    if action.kind == ActionKind.PLACE:
-      disk = self.hands[player]
-      if disk is None or not self._can_place(disk, pole_id):
+    mapping = POLE_KEYS[player]
+    if state.poles[mapping["1"]] or state.poles[mapping["2"]]:
         return False
-      self.poles[pole_id].append(disk)
-      self.hands[player] = None
-      return True
-
-    return False
+    return bool(state.poles[mapping["3"]])
 
 
-def parse_action(raw: str, pole: Optional[int] = None) -> Action:
-  """Parse action strings used by the text replay format."""
-  kind = ActionKind(raw.lower())
-  if kind == ActionKind.SKIP:
-    return Action(kind)
-  if pole is None:
-    raise ValueError(f"pole required for action {raw}")
-  return Action(kind, pole)
+class HanoiCrossingEngine:
+    """Environment core for Hanoi Crossing.
+
+    Agents interact via :meth:`observe`, :meth:`legal_actions`, and :meth:`step`.
+    Turn order is supplied externally and never inferred by the engine.
+    """
+
+    def __init__(
+        self,
+        n: int,
+        *,
+        turn_order: Sequence[PlayerId] | None = None,
+        state: BoardState | None = None,
+    ) -> None:
+        if n < 1:
+            raise ValueError("n must be >= 1")
+        self.n = n
+        self._turn_order = list(turn_order) if turn_order is not None else []
+        self._turn_index = 0
+        self._state = state.copy() if state is not None else BoardState(poles=_initial_poles(n))
+        self._done = False
+        self._winner: PlayerId | None = None
+
+    @property
+    def state(self) -> BoardState:
+        return self._state.copy()
+
+    @property
+    def done(self) -> bool:
+        return self._done
+
+    @property
+    def winner(self) -> PlayerId | None:
+        return self._winner
+
+    @property
+    def turn_index(self) -> int:
+        return self._turn_index
+
+    @property
+    def turn_order(self) -> list[PlayerId]:
+        return list(self._turn_order)
+
+    @property
+    def expected_player(self) -> PlayerId | None:
+        if self._turn_index >= len(self._turn_order):
+            return None
+        return self._turn_order[self._turn_index]
+
+    def observe(self, player: PlayerId) -> Observation:
+        poles: dict[PoleView, tuple[int, ...]] = {}
+        for view in _visible_poles(player):
+            key = _pole_key(player, view)
+            poles[view] = tuple(self._state.poles[key])
+        return Observation(player=player, poles=poles, hand=self._state.hands[player])
+
+    def legal_actions(self, player: PlayerId) -> list[Action]:
+        actions: list[Action] = [Action(ActionKind.SKIP)]
+        hand = self._state.hands[player]
+        for view in _visible_poles(player):
+            key = _pole_key(player, view)
+            stack = self._state.poles[key]
+            if hand is None and stack:
+                actions.append(Action(ActionKind.LIFT, view))
+            elif hand is not None and _can_place(hand, stack):
+                actions.append(Action(ActionKind.PLACE, view))
+        return actions
+
+    def step(self, player: PlayerId, action: Action) -> StepResult:
+        observation = self.observe(player)
+        legal_actions = tuple(self.legal_actions(player))
+        turn_index = self._turn_index
+
+        if self._done:
+            return StepResult(
+                False,
+                True,
+                self._winner,
+                "game already finished",
+                acting_player=player,
+                action=action,
+                observation=observation,
+                legal_actions=legal_actions,
+                turn_index=turn_index,
+            )
+
+        # Protocol violation (not an illegal move): soft-fail so agent loops keep
+        # running. Replay uses strict validation upstream; see README §6.
+        if self._turn_order and self.expected_player != player:
+            expected = self.expected_player
+            self._advance_turn()
+            return StepResult(
+                False,
+                self._done,
+                self._winner,
+                f"expected player {expected}, got {player}",
+                acting_player=player,
+                action=action,
+                observation=observation,
+                legal_actions=legal_actions,
+                turn_index=turn_index,
+            )
+
+        if action not in legal_actions:
+            self._advance_turn()
+            return StepResult(
+                False,
+                self._done,
+                self._winner,
+                "illegal action",
+                acting_player=player,
+                action=action,
+                observation=observation,
+                legal_actions=legal_actions,
+                turn_index=turn_index,
+            )
+
+        self._apply_action(player, action)
+        if _check_win(self._state, player):
+            self._done = True
+            self._winner = player
+        self._advance_turn()
+        return StepResult(
+            True,
+            self._done,
+            self._winner,
+            None,
+            acting_player=player,
+            action=action,
+            observation=observation,
+            legal_actions=legal_actions,
+            turn_index=turn_index,
+        )
+
+    def _apply_action(self, player: PlayerId, action: Action) -> None:
+        if action.kind is ActionKind.SKIP:
+            return
+        assert action.pole is not None
+        key = _pole_key(player, action.pole)
+        if action.kind is ActionKind.LIFT:
+            disk = self._state.poles[key].pop()
+            self._state.hands[player] = disk
+        else:
+            disk = self._state.hands[player]
+            assert disk is not None
+            self._state.poles[key].append(disk)
+            self._state.hands[player] = None
+
+    def _advance_turn(self) -> None:
+        if self._turn_order:
+            self._turn_index += 1
+
+    def run(self, moves: Sequence[tuple[PlayerId, Action]]) -> PlayerId | None:
+        """Apply a scripted sequence of (player, action) pairs."""
+        for player, action in moves:
+            if self._done:
+                break
+            self.step(player, action)
+        return self._winner

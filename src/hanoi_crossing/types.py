@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 
 class Player(str, Enum):
     A = "A"
     B = "B"
+
+
+PLAYER_A = Player.A
+PLAYER_B = Player.B
 
 
 class ActionKind(str, Enum):
@@ -29,6 +33,26 @@ class StepResult:
     legal: bool
     done: bool
     winner: Optional[Player] = None
+    turn_index: int = 0
+    reason: Optional[str] = None
+
+    @property
+    def valid(self) -> bool:
+        return self.legal
+
+
+@dataclass
+class StepTrace:
+    turn_index: int
+    expected_player: Player
+    acting_player: Player
+    action: Action
+    valid: bool
+    done: bool
+    winner: Optional[Player]
+    reason: Optional[str]
+    observation: dict[str, Any]
+    legal_actions: tuple[Action, ...]
 
 
 # Local pole number (1/2/3) -> internal pole id for each player.

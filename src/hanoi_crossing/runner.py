@@ -1,147 +1,95 @@
-"""Episode orchestration — turn loop, replay loading, run helpers."""
+"""Episode orchestration for agents and scripted replays."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Any, Iterable
+from dataclasses import dataclass, field
 
-from hanoi_crossing.agents import Agent, RandomAgent, ScriptedAgent
-from hanoi_crossing.engine import Game, parse_action
-from hanoi_crossing.types import Action, ActionKind, Player
+from hanoi_crossing.agents import Agent
+from hanoi_crossing.engine import Game
+from hanoi_crossing.types import Action, Player, StepTrace
 
 
-def build_turn_order(max_turns: int, pattern: str = "ab") -> list[Player]:
-  if max_turns < 1:
-    raise ValueError("max_turns must be >= 1")
-  if pattern == "ab":
-    return [Player.A if i % 2 == 0 else Player.B for i in range(max_turns)]
-  if pattern == "a":
-    return [Player.A] * max_turns
-  if pattern == "b":
-    return [Player.B] * max_turns
-  order = [Player(c.upper()) for c in pattern]
-  if len(order) < max_turns:
-    order = (order * ((max_turns // len(order)) + 1))[:max_turns]
-  return order
+class ReplayValidationError(ValueError):
+  """Raised when a replay file disagrees with the configured turn order."""
 
 
-class EpisodeRunner:
-  """Runs a game episode by querying agents and stepping the engine."""
-
-  def __init__(self, game: Game, agents: dict[Player, Agent]) -> None:
-    self.game = game
-    self.agents = agents
-
-  @classmethod
-  def with_shared_agent(cls, game: Game, agent: Agent) -> EpisodeRunner:
-    return cls(game, {Player.A: agent, Player.B: agent})
-
-  def run(self) -> Game:
-    while self.game.has_more_turns():
-      player = self.game.current_player()
-      action = self.agents[player].act(self.game)
-      self.game.step(action)
-      if self.game.done:
-        break
-    return self.game
-
-
-def run_random(
-  n: int,
-  max_turns: int,
-  *,
-  seed: int | None = None,
-  turn_pattern: str = "ab",
-) -> Game:
-  game = Game(n, build_turn_order(max_turns, turn_pattern))
-  return EpisodeRunner.with_shared_agent(game, RandomAgent(seed=seed)).run()
-
-
-def run_replay(
-  n: int,
-  turn_order: list[Player | str],
-  moves: list[Action],
-  *,
-  scripted_players: list[Player] | None = None,
-) -> Game:
-  order = [Player(p) for p in turn_order]
-  if scripted_players:
-    for idx, actor in enumerate(scripted_players):
-      if idx < len(order) and actor != order[idx]:
-        raise ValueError(
-          f"turn {idx + 1}: move player {actor.value} does not match order {order[idx].value}"
-        )
-  game = Game(n, order)
-  return EpisodeRunner.with_shared_agent(game, ScriptedAgent(moves)).run()
-
-
-def run_replay_file(path: Path) -> Game:
-  n, turn_order, moves, scripted_players = load_replay_file(path)
-  return run_replay(n, turn_order, moves, scripted_players=scripted_players)
-
-
-def load_replay_file(
-  path: Path,
-) -> tuple[int, list[Player], list[Action], list[Player] | None]:
-  text = path.read_text()
-  if path.suffix.lower() == ".json":
-    data = json.loads(text)
-    return (
-      int(data["n"]),
-      [Player(p) for p in data["turn_order"]],
-      _parse_moves(data["moves"]),
-      None,
+def validate_replay(
+  turn_order: list[Player],
+  moves: list[tuple[Player, Action]],
+) -> None:
+  """Ensure each scripted move matches the external turn order."""
+  if not turn_order:
+    return
+  limit = min(len(turn_order), len(moves))
+  for index in range(limit):
+    expected = turn_order[index]
+    actual, _ = moves[index]
+    if actual != expected:
+      raise ReplayValidationError(
+        f"move {index + 1}: turn order expects {expected.value}, replay says {actual.value}"
+      )
+  if len(moves) > len(turn_order):
+    extra = len(moves) - len(turn_order)
+    raise ReplayValidationError(
+      f"replay has {extra} more move(s) than entries in turn order"
     )
 
-  n, turn_order, scripted = _parse_text_replay(text.splitlines())
-  return (
-    n,
-    turn_order,
-    [action for _, action in scripted],
-    [player for player, _ in scripted],
-  )
 
+@dataclass
+class EpisodeRunner:
+  """Runs episodes while collecting per-step traces for evaluation."""
 
-def _parse_moves(raw_moves: list[dict[str, Any]]) -> list[Action]:
-  actions: list[Action] = []
-  for entry in raw_moves:
-    kind = ActionKind(entry["action"])
-    pole = entry.get("pole")
-    if kind == ActionKind.SKIP:
-      actions.append(Action(kind))
-    else:
-      if pole is None:
-        raise ValueError(f"pole required for {kind.value}")
-      actions.append(Action(kind, int(pole)))
-  return actions
+  engine: Game
+  traces: list[StepTrace] = field(default_factory=list)
 
+  def reset_traces(self) -> None:
+    self.traces.clear()
 
-def _parse_text_replay(lines: list[str]) -> tuple[int, list[Player], list[tuple[Player, Action]]]:
-  n: int | None = None
-  turn_order: list[Player] = []
-  scripted: list[tuple[Player, Action]] = []
+  def run_turn(self, player: Player, action: Action) -> None:
+    expected = self.engine.expected_player
+    if expected is None:
+      raise RuntimeError("cannot run turn: no expected player")
+    observation = self.engine.observe(player)
+    legal_actions = tuple(self.engine.legal_actions(player))
+    result = self.engine.step(player, action)
+    self.traces.append(
+      StepTrace(
+        turn_index=result.turn_index,
+        expected_player=expected,
+        acting_player=player,
+        action=action,
+        valid=result.valid,
+        done=result.done,
+        winner=result.winner,
+        reason=result.reason,
+        observation=observation,
+        legal_actions=legal_actions,
+      )
+    )
 
-  for lineno, raw in enumerate(lines, start=1):
-    line = raw.strip()
-    if not line or line.startswith("#"):
-      continue
-    parts = line.split()
-    if parts[0].lower() == "n" and len(parts) == 2:
-      n = int(parts[1])
-      continue
-    if parts[0].lower() == "turn" and len(parts) >= 2:
-      turn_order = [Player(p) for p in parts[1:]]
-      continue
-    if parts[0] in ("A", "B") and len(parts) >= 2:
-      player = Player(parts[0])
-      action = parse_action(parts[1], int(parts[2]) if len(parts) > 2 else None)
-      scripted.append((player, action))
-      continue
-    raise ValueError(f"line {lineno}: unrecognized syntax: {line}")
+  def run_agent(self, agent: Agent, *, max_steps: int | None = None) -> Player | None:
+    """Run until the game ends or the turn schedule is exhausted."""
+    steps = 0
+    while not self.engine.done and self.engine.expected_player is not None:
+      if max_steps is not None and steps >= max_steps:
+        break
+      player = self.engine.expected_player
+      action = agent.act(self.engine, player)
+      self.run_turn(player, action)
+      steps += 1
+    return self.engine.winner
 
-  if n is None:
-    raise ValueError("missing 'n <disks>' line")
-  if not turn_order:
-    raise ValueError("missing 'turn ...' line")
-  return n, turn_order, scripted
+  def run_scripted(
+    self,
+    moves: list[tuple[Player, Action]],
+    *,
+    strict: bool = False,
+  ) -> Player | None:
+    """Apply a fixed list of player/action pairs."""
+    if strict:
+      validate_replay(self.engine.turn_order, moves)
+    for player, action in moves:
+      if self.engine.done:
+        break
+      self.run_turn(player, action)
+    return self.engine.winner

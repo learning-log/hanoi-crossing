@@ -1,9 +1,17 @@
 """Hanoi Crossing — two-player cooperative-competitive Tower of Hanoi variant."""
 
-from hanoi_crossing.agents import Agent, RandomAgent, ScriptedAgent
+from hanoi_crossing.agents import Agent, RandomAgent
 from hanoi_crossing.engine import Game, parse_action
-from hanoi_crossing.runner import EpisodeRunner, run_random, run_replay, run_replay_file
-from hanoi_crossing.types import Action, ActionKind, Player, StepResult
+from hanoi_crossing.runner import EpisodeRunner, ReplayValidationError, validate_replay
+from hanoi_crossing.types import (
+  Action,
+  ActionKind,
+  Player,
+  StepResult,
+  StepTrace,
+  PLAYER_A,
+  PLAYER_B,
+)
 
 __all__ = [
   "Action",
@@ -11,12 +19,13 @@ __all__ = [
   "Agent",
   "EpisodeRunner",
   "Game",
+  "PLAYER_A",
+  "PLAYER_B",
   "Player",
   "RandomAgent",
-  "ScriptedAgent",
+  "ReplayValidationError",
   "StepResult",
+  "StepTrace",
   "parse_action",
-  "run_random",
-  "run_replay",
-  "run_replay_file",
+  "validate_replay",
 ]
