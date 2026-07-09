@@ -142,20 +142,6 @@ def test_engine_rejects_invalid_n():
         HanoiCrossingEngine(0)
 
 
-def test_engine_run_stops_after_winner():
-    engine = HanoiCrossingEngine(1, turn_order=["A", "B", "A", "A"])
-    winner = engine.run(
-        [
-            ("A", Action(ActionKind.LIFT, "1")),
-            ("B", Action(ActionKind.LIFT, "1")),
-            ("A", Action(ActionKind.PLACE, "3")),
-            ("A", Action(ActionKind.SKIP)),
-        ]
-    )
-    assert winner == "A"
-    assert engine.turn_index == 3
-
-
 def test_opponent_win_detected_when_shared_pole_cleared():
     """A is already solved except shared pole 2; B clearing it ends the game."""
     state = BoardState(

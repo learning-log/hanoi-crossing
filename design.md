@@ -99,7 +99,9 @@ run_turn:    record pre-step obs/actions → step → append StepTrace
 ```
 
 Separation keeps the engine usable standalone (unit tests call `step` directly)
-while the runner adds traces for eval harnesses.
+while the runner adds traces for eval harnesses. Multi-step episodes
+(`run_scripted`, `run_agent`) are **runner-only**; the engine exposes
+single-step `observe`, `legal_actions`, and `step` only.
 
 ### 3.4 Value objects (dataclasses)
 
@@ -318,6 +320,7 @@ examples/          # Sample replay files
 | Monolithic `types.py` | Split `actions.py` + `models.py` | Separate action grammar from game state models |
 | `Game` class name | `HanoiCrossingEngine` | Clearer role as environment core |
 | Orchestration in CLI | `EpisodeRunner` in `runner.py` | Reusable across CLI, RL, and services |
+| `engine.run(moves)` convenience | Removed; use `EpisodeRunner.run_scripted` | Single orchestration path; traces always available |
 
 ## 11. Running the project
 
@@ -332,7 +335,7 @@ uv run python -m hanoi_crossing.cli.random_play 2 --steps 100 --seed 1
 # Optional flags: --json, --trace
 ```
 
-Requires **Python 3.13+** and [uv](https://docs.astral.sh/uv/).
+Requires **Python 3.11+** and [uv](https://docs.astral.sh/uv/).
 
 ## 12. Known gaps / follow-ups
 

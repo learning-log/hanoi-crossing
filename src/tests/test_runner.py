@@ -111,6 +111,21 @@ def test_game_stops_after_winner():
     assert len(runner.traces) == 3
 
 
+def test_run_scripted_stops_after_winner():
+    engine = HanoiCrossingEngine(1, turn_order=["A", "B", "A", "A"])
+    winner = EpisodeRunner(engine).run_scripted(
+        [
+            ("A", Action(ActionKind.LIFT, "1")),
+            ("B", Action(ActionKind.LIFT, "1")),
+            ("A", Action(ActionKind.PLACE, "3")),
+            ("A", Action(ActionKind.SKIP)),
+        ],
+    )
+
+    assert winner == "A"
+    assert engine.turn_index == 3
+
+
 def test_step_after_game_over_is_rejected():
     engine = HanoiCrossingEngine(1, turn_order=["A", "B", "A", "A"])
     runner = EpisodeRunner(engine)

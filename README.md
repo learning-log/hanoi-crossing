@@ -9,7 +9,7 @@ to pole 3 with an empty hand while poles 1 and 2 are clear.
 
 ## Quick start
 
-Requires [uv](https://docs.astral.sh/uv/) and **Python 3.13+**.
+Requires [uv](https://docs.astral.sh/uv/) and **Python 3.11+**.
 
 ```bash
 uv sync --dev

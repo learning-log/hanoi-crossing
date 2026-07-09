@@ -230,11 +230,3 @@ class HanoiCrossingEngine:
     def _advance_turn(self) -> None:
         if self._turn_order:
             self._turn_index += 1
-
-    def run(self, moves: Sequence[tuple[PlayerId, Action]]) -> PlayerId | None:
-        """Apply a scripted sequence of (player, action) pairs."""
-        for player, action in moves:
-            if self._done:
-                break
-            self.step(player, action)
-        return self._winner
