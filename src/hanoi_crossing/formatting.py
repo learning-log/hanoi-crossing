@@ -8,7 +8,7 @@ from typing import Any
 
 from hanoi_crossing.actions import Action, parse_action, parse_player
 from hanoi_crossing.engine import HanoiCrossingEngine
-from hanoi_crossing.models import BoardSnapshot, Observation, PlayerId, StepTrace
+from hanoi_crossing.models import BoardSnapshot, EngineSnapshot, Observation, PlayerId, StepTrace
 
 
 def format_board(state: BoardSnapshot) -> str:
@@ -82,17 +82,39 @@ def format_traces(traces: list[StepTrace]) -> str:
     return "\n".join(lines)
 
 
+def engine_to_dict(engine: HanoiCrossingEngine) -> dict[str, Any]:
+    return {
+        "n": engine.n,
+        "turn_order": list(engine.turn_order),
+        "turn_index": engine.turn_index,
+        "done": engine.done,
+        "winner": engine.winner,
+        "state": state_to_dict(engine.state),
+    }
+
+
+def engine_from_dict(data: dict[str, Any]) -> HanoiCrossingEngine:
+    board_data = data["state"]
+    board = BoardSnapshot(
+        poles={k: tuple(v) for k, v in board_data["poles"].items()},
+        hands=dict(board_data["hands"]),
+    )
+    snap = EngineSnapshot(
+        n=int(data["n"]),
+        turn_order=tuple(parse_player(p) for p in data.get("turn_order", [])),
+        turn_index=int(data["turn_index"]),
+        done=bool(data["done"]),
+        winner=parse_player(data["winner"]) if data.get("winner") else None,
+        board=board,
+    )
+    return HanoiCrossingEngine.from_snapshot(snap)
+
+
 def result_to_dict(
     engine: HanoiCrossingEngine,
     traces: list[StepTrace] | None = None,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "n": engine.n,
-        "done": engine.done,
-        "winner": engine.winner,
-        "turn_index": engine.turn_index,
-        "state": state_to_dict(engine.state),
-    }
+    payload = engine_to_dict(engine)
     if traces is not None:
         payload["trace"] = [trace_to_dict(trace) for trace in traces]
     return payload

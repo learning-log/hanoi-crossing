@@ -286,7 +286,7 @@ Traces enable audit of eval harnesses and replay debugging. Enable via
 ```text
 src/hanoi_crossing/
   actions.py       # Action, ActionKind, parsers
-  models.py        # BoardState, BoardSnapshot, Observation, StepResult, StepTrace
+  models.py        # BoardState, BoardSnapshot, EngineSnapshot, Observation, StepResult, StepTrace
   engine.py        # HanoiCrossingEngine
   agents.py        # Agent protocol, RandomAgent, ScriptedAgent
   runner.py        # EpisodeRunner, validate_replay
@@ -304,6 +304,7 @@ examples/          # Sample replay files
 |-----------------|---------------|
 | **RL training loop** | Implement `Agent`; call via `EpisodeRunner.run_agent` |
 | **Online service** | Serialize `Observation` + `legal_actions` in; `Action` out; `step` on server |
+| **Checkpoint / restore** | `engine.snapshot()` → `EngineSnapshot`; restore via `HanoiCrossingEngine.from_snapshot` or `engine_from_dict` / `engine_to_dict` in `formatting.py` (includes `turn_order`, `turn_index`, `done`, `winner`, board) |
 | **New policy** | Subclass or implement `Agent.act(observation, legal_actions)` |
 | **Greedy solver** | New agent class; no engine changes |
 | **Concurrent games** | One `HanoiCrossingEngine` instance per game; runner is not shared |

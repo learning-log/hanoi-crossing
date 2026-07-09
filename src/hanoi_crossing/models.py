@@ -49,6 +49,18 @@ class BoardSnapshot:
 
 
 @dataclass(frozen=True)
+class EngineSnapshot:
+    """Full engine checkpoint for faithful save/restore."""
+
+    n: int
+    turn_order: tuple[PlayerId, ...]
+    turn_index: int
+    done: bool
+    winner: PlayerId | None
+    board: BoardSnapshot
+
+
+@dataclass(frozen=True)
 class StepResult:
     """Outcome of applying one action for the acting player."""
 
@@ -98,4 +110,11 @@ class BoardState:
         return BoardSnapshot(
             poles=frozen_mapping({k: tuple(v) for k, v in self.poles.items()}),
             hands=frozen_mapping(dict(self.hands)),
+        )
+
+    @classmethod
+    def from_snapshot(cls, snap: BoardSnapshot) -> BoardState:
+        return cls(
+            poles={k: list(v) for k, v in snap.poles.items()},
+            hands=dict(snap.hands),
         )

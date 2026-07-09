@@ -9,12 +9,27 @@ from hanoi_crossing.models import (
     POLE_KEYS,
     BoardSnapshot,
     BoardState,
+    EngineSnapshot,
     Observation,
     PoleView,
     PlayerId,
     StepResult,
     frozen_mapping,
 )
+
+
+def _validate_checkpoint(
+    turn_order: list[PlayerId],
+    turn_index: int,
+    done: bool,
+    winner: PlayerId | None,
+) -> None:
+    if turn_index < 0:
+        raise ValueError("turn_index must be >= 0")
+    if winner is not None and not done:
+        raise ValueError("winner requires done=True")
+    if turn_order and not done and turn_index > len(turn_order):
+        raise ValueError("turn_index past end of turn_order")
 
 
 def _initial_poles(n: int) -> dict[str, list[int]]:
@@ -80,16 +95,41 @@ class HanoiCrossingEngine:
         *,
         turn_order: Sequence[PlayerId] | None = None,
         state: BoardState | None = None,
+        turn_index: int = 0,
+        done: bool = False,
+        winner: PlayerId | None = None,
     ) -> None:
         if n < 1:
             raise ValueError("n must be >= 1")
         self.n = n
         self._turn_order = list(turn_order) if turn_order is not None else []
-        self._turn_index = 0
+        _validate_checkpoint(self._turn_order, turn_index, done, winner)
+        self._turn_index = turn_index
         self._state = state.copy() if state is not None else BoardState(poles=_initial_poles(n))
-        self._done = False
-        self._winner: PlayerId | None = None
+        self._done = done
+        self._winner = winner
         self._snapshot_cache: BoardSnapshot | None = None
+
+    def snapshot(self) -> EngineSnapshot:
+        return EngineSnapshot(
+            n=self.n,
+            turn_order=tuple(self._turn_order),
+            turn_index=self._turn_index,
+            done=self._done,
+            winner=self._winner,
+            board=self.state,
+        )
+
+    @classmethod
+    def from_snapshot(cls, snap: EngineSnapshot) -> HanoiCrossingEngine:
+        return cls(
+            snap.n,
+            turn_order=snap.turn_order,
+            state=BoardState.from_snapshot(snap.board),
+            turn_index=snap.turn_index,
+            done=snap.done,
+            winner=snap.winner,
+        )
 
     @property
     def state(self) -> BoardSnapshot:

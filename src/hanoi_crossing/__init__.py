@@ -3,7 +3,7 @@
 from hanoi_crossing.actions import Action, ActionKind
 from hanoi_crossing.agents import Agent, RandomAgent, ScriptedAgent
 from hanoi_crossing.engine import HanoiCrossingEngine
-from hanoi_crossing.models import BoardSnapshot, Observation, StepResult, StepTrace
+from hanoi_crossing.models import BoardSnapshot, EngineSnapshot, Observation, StepResult, StepTrace
 from hanoi_crossing.runner import EpisodeRunner, ReplayValidationError, validate_replay
 
 __all__ = [
@@ -13,6 +13,7 @@ __all__ = [
     "EpisodeRunner",
     "HanoiCrossingEngine",
     "BoardSnapshot",
+    "EngineSnapshot",
     "Observation",
     "RandomAgent",
     "ReplayValidationError",

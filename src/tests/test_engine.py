@@ -189,3 +189,53 @@ def test_state_snapshot_cached_until_mutation():
     assert s1 is s2
     engine.step("A", Action(ActionKind.LIFT, "1"))
     assert engine.state is not s1
+
+
+def _assert_engines_equivalent(a: HanoiCrossingEngine, b: HanoiCrossingEngine) -> None:
+    assert a.n == b.n
+    assert a.turn_order == b.turn_order
+    assert a.turn_index == b.turn_index
+    assert a.done == b.done
+    assert a.winner == b.winner
+    assert a.expected_player == b.expected_player
+    assert dict(a.state.poles) == dict(b.state.poles)
+    assert dict(a.state.hands) == dict(b.state.hands)
+
+
+def test_engine_snapshot_round_trip():
+    engine = HanoiCrossingEngine(1, turn_order=["A", "B", "A", "B"])
+    EpisodeRunner(engine).run_scripted(
+        [
+            ("A", Action(ActionKind.LIFT, "1")),
+            ("B", Action(ActionKind.LIFT, "1")),
+        ],
+    )
+
+    restored = HanoiCrossingEngine.from_snapshot(engine.snapshot())
+    _assert_engines_equivalent(engine, restored)
+
+    action = Action(ActionKind.PLACE, "2")
+    original_result = engine.step("A", action)
+    replay_result = restored.step("A", action)
+    assert original_result.valid == replay_result.valid
+    _assert_engines_equivalent(engine, restored)
+
+
+def test_engine_from_dict_round_trip():
+    from hanoi_crossing.formatting import engine_from_dict, engine_to_dict
+
+    engine = HanoiCrossingEngine(1, turn_order=["A", "B", "A", "B"])
+    EpisodeRunner(engine).run_scripted(
+        [
+            ("A", Action(ActionKind.LIFT, "1")),
+            ("B", Action(ActionKind.LIFT, "1")),
+        ],
+    )
+
+    restored = engine_from_dict(engine_to_dict(engine))
+    _assert_engines_equivalent(engine, restored)
+
+
+def test_restore_rejects_invalid_checkpoint():
+    with pytest.raises(ValueError, match="winner requires done"):
+        HanoiCrossingEngine(1, turn_order=["A"], done=False, winner="A")
