@@ -48,6 +48,20 @@ def _check_win(state: BoardState, player: PlayerId) -> bool:
     return bool(state.poles[mapping["3"]])
 
 
+def _find_winner(state: BoardState, *, acting_player: PlayerId) -> PlayerId | None:
+    """Return the winner after a valid step, scanning both players.
+
+    Tie-break: if both players satisfy the win condition simultaneously, the
+    acting player is credited (see README § Win detection).
+    """
+    winners = [player for player in ("A", "B") if _check_win(state, player)]
+    if not winners:
+        return None
+    if len(winners) == 1:
+        return winners[0]
+    return acting_player
+
+
 class HanoiCrossingEngine:
     """Environment core for Hanoi Crossing.
 
@@ -169,9 +183,10 @@ class HanoiCrossingEngine:
             )
 
         self._apply_action(player, action)
-        if _check_win(self._state, player):
+        winner = _find_winner(self._state, acting_player=player)
+        if winner is not None:
             self._done = True
-            self._winner = player
+            self._winner = winner
         self._advance_turn()
         return StepResult(
             True,

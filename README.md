@@ -64,9 +64,16 @@ brief. `step()` returns `StepResult(legal=False, ...)`.
 
 ### Win detection
 
-After every **legal** state-changing action, the engine checks both players.
-A player wins when their hand is empty and, among their visible poles, only
-pole 3 holds disks (poles 1 and 2 must be empty).
+After every **valid** step (including skip), the engine checks **both**
+players against the win condition. A player wins when their hand is empty and,
+among their visible poles, only pole 3 holds disks (poles 1 and 2 must be
+empty).
+
+This catches configurations reached as a side-effect of the opponent's move
+(e.g. clearing the shared pole) without requiring the winner to act again.
+
+**Tie-break:** if both players satisfy the win condition on the same step, the
+**acting player** is credited as winner.
 
 ### Replay formats
 

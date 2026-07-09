@@ -5,6 +5,7 @@ import pytest
 from hanoi_crossing.actions import Action, ActionKind
 from hanoi_crossing.engine import HanoiCrossingEngine
 from hanoi_crossing.formatting import load_replay, parse_replay_text
+from hanoi_crossing.models import BoardState
 from hanoi_crossing.runner import EpisodeRunner
 
 
@@ -153,3 +154,29 @@ def test_engine_run_stops_after_winner():
     )
     assert winner == "A"
     assert engine.turn_index == 3
+
+
+def test_opponent_win_detected_when_shared_pole_cleared():
+    """A is already solved except shared pole 2; B clearing it ends the game."""
+    state = BoardState(
+        poles={"1a": [], "1b": [4, 2], "2": [2], "3a": [3, 1], "3b": []},
+        hands={"A": None, "B": None},
+    )
+    engine = HanoiCrossingEngine(2, turn_order=["B"], state=state)
+    result = engine.step("B", Action(ActionKind.LIFT, "2"))
+
+    assert result.valid
+    assert engine.winner == "A"
+    assert engine.done
+
+
+def test_simultaneous_win_tiebreak_credits_acting_player():
+    state = BoardState(
+        poles={"1a": [], "1b": [], "2": [], "3a": [1], "3b": [2]},
+        hands={"A": None, "B": None},
+    )
+    engine = HanoiCrossingEngine(1, turn_order=["A"], state=state)
+    engine.step("A", Action(ActionKind.SKIP))
+
+    assert engine.winner == "A"
+    assert engine.done
