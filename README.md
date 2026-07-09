@@ -5,13 +5,31 @@ three poles; pole 2 is shared and visible to both. Players start with `N` disks
 on their pole 1 (A: odd sizes, B: even sizes) and win by moving all their disks
 to pole 3 with an empty hand while poles 1 and 2 are clear.
 
+**Full architecture, design patterns, and semantics:** see [design.md](design.md).
+
 ## Quick start
+
+Requires [uv](https://docs.astral.sh/uv/) and **Python 3.13+**.
 
 ```bash
 uv sync --dev
 uv run pytest
+
+# Replay a recorded game
 uv run hanoi-crossing replay examples/n1_win.txt
-uv run hanoi-crossing random --n 2 --turns 100 --seed 1
+
+# Random self-play (random turn order, uniform legal moves)
+uv run hanoi-crossing random 2 --steps 100 --seed 1
+
+# Optional: --json for machine-readable output, --trace for per-step logs
+uv run hanoi-crossing replay examples/n1_win.txt --trace
+```
+
+Equivalent module invocations:
+
+```bash
+uv run python -m hanoi_crossing.cli.replay examples/n1_win.txt
+uv run python -m hanoi_crossing.cli.random_play 2 --steps 100 --seed 1
 ```
 
 ## Board layout
@@ -27,146 +45,101 @@ uv run hanoi-crossing random --n 2 --turns 100 --seed 1
 - **Player A** sees poles `1 → 1a`, `2 → shared`, `3 → 3a`
 - **Player B** sees poles `1 → 1b`, `2 → shared`, `3 → 3b`
 
-Players never observe the opponent's private poles (`1b`/`3b` for A, `1a`/`3a`
-for B) or the opponent's hand.
+Players never observe the opponent's private poles or the opponent's hand.
 
-## Design decisions
+## Architecture (summary)
 
-### Engine and agent API (RL / service ready)
+| Layer | Module | Role |
+|-------|--------|------|
+| Engine | `HanoiCrossingEngine` | Rules, `observe`, `legal_actions`, `step` |
+| Agents | `Agent`, `RandomAgent`, `ScriptedAgent` | `act(observation, legal_actions) → Action` |
+| Orchestration | `EpisodeRunner` | Episode loop, eval traces, replay validation |
+| I/O | `formatting.py` | Replay parsing, JSON/text output |
 
-`HanoiCrossingEngine` is the environment core. **Agents** implement
-`act(observation, legal_actions) -> Action` — they receive only a player-local
-`Observation` and the legal action list, not the engine handle. This matches how
-a remote RL or LLM agent would consume the env over the wire.
+Agents receive **only** an `Observation` and legal action list — not the engine
+handle. `EpisodeRunner` orchestrates observe → act → step. Full board state
+(`engine.state`) is for logging and tests only.
 
-`EpisodeRunner` orchestrates: observe → agent.act → step. Full board state
-(`engine.state`) is for logging, CLI output, and tests only.
+Turn order is always supplied externally; the engine never assumes alternating
+A/B play.
 
-| Engine method | Purpose |
-|---------------|---------|
-| `observe(player)` | player-local partial view |
-| `legal_actions(player)` | action mask for that player |
-| `step(player, action)` | apply one turn; illegal moves waste the turn |
-| `state` | full board snapshot (ops/logging, not for agents) |
+See [design.md](design.md) for layer diagrams, failure-mode semantics, win
+detection, information boundaries, and extension points.
 
-Turn order is **always supplied externally** — the engine never assumes
-alternating A/B play.
+## Replay formats
 
-### Pole numbering
+**Text** (hand-editing friendly):
 
-Actions use **local pole numbers 1–3** from the acting player's perspective.
-Internally poles are keyed `1a`, `2`, `3a`, `1b`, `3b`.
+```text
+n 1
+turn A B A
+move A lift 1
+move B lift 1
+move A place 3
+```
 
-### Illegal moves
-
-An illegal action leaves state unchanged and still consumes the turn, per the
-brief. `step()` returns `StepResult(legal=False, ...)`.
-
-### Win detection
-
-After every **valid** step (including skip), the engine checks **both**
-players against the win condition. A player wins when their hand is empty and,
-among their visible poles, only pole 3 holds disks (poles 1 and 2 must be
-empty).
-
-This catches configurations reached as a side-effect of the opponent's move
-(e.g. clearing the shared pole) without requiring the winner to act again.
-
-**Tie-break:** if both players satisfy the win condition on the same step, the
-**acting player** is credited as winner.
-
-### Replay formats
-
-**JSON** (good for tooling):
+**JSON** (tooling friendly):
 
 ```json
 {
   "n": 1,
   "turn_order": ["A", "B", "A"],
   "moves": [
-    {"action": "lift", "pole": 1},
-    {"action": "lift", "pole": 1},
-    {"action": "place", "pole": 3}
+    {"player": "A", "action": "lift 1"},
+    {"player": "B", "action": "lift 1"},
+    {"player": "A", "action": "place 3"}
   ]
 }
 ```
 
-**Text** (good for hand-editing):
-
-```
-n 1
-turn A B A
-A lift 1
-B lift 1
-A place 3
-```
-
-`moves` align positionally with `turn_order`. Text format additionally prefixes
-each move line with the acting player for readability; the CLI verifies it
-matches `turn_order`.
-
-### Random play
-
-`hanoi-crossing random` builds a turn sequence (default alternating `AB`), then
-each turn samples uniformly from `legal_actions()`. This uses the same API an
-external agent would — no engine shortcuts.
+Replay CLI validates move players against `turn_order` by default (`--no-strict`
+to disable).
 
 ## Project layout
 
 ```
 src/hanoi_crossing/
-  types.py      # Player, Action, pole maps
-  engine.py     # Game rules and stepping
-  agents.py     # RandomAgent, ScriptedAgent, Agent (stub)
-  runner.py     # EpisodeRunner orchestration
+  actions.py        # Action, ActionKind, parsers
+  models.py         # BoardState, Observation, StepResult, StepTrace
+  engine.py         # HanoiCrossingEngine
+  agents.py         # Agent protocol, RandomAgent, ScriptedAgent
+  runner.py         # EpisodeRunner, validate_replay
+  formatting.py     # Replay I/O, formatting, serialization
   cli/
-    replay_cli.py   # replay frontend
-    random_cli.py   # random-play frontend
-tests/
+    replay.py       # Replay CLI
+    random_play.py  # Random-play CLI
+src/tests/
 examples/
+design.md           # Architecture and design decisions (detailed)
 ```
-
-Core engine (`engine.py` + `types.py`) is under 200 lines.
 
 ## Development notes
 
-This section records **build order and reversed decisions** so the reasoning is
-visible even when commit history is imperfect.
+Build order and reversed decisions are documented in [design.md §10](design.md#10-decisions-tried-and-reversed).
+This section records the journey for reviewers when commit history is squashed.
 
 ### Build order
 
-1. **Types first** (`Player`, `Action`, `POLE_MAP`) — settled naming before any
-   rule logic so CLI and tests could share one vocabulary.
-2. **Engine** — initial stacks, `legal_actions`, `step`, win check, `observation`
-   and `clone` for future RL use.
-3. **CLI** — replay parser (JSON + text), then random self-play on top of the
-   public engine API.
-4. **Tests** — engine rules directly; CLI only for file replay smoke tests.
-5. **Examples + README** — documented formats after the parsers existed.
+1. **Types** — `actions.py` + `models.py` before rule logic
+2. **Engine** — `HanoiCrossingEngine` with external turn order
+3. **Runner + agents** — `EpisodeRunner`, `Agent` protocol, reference policies
+4. **CLI** — replay and random-play on top of the public API
+5. **Tests** — engine directly; runner, formatting, and CLI smoke tests
+6. **design.md** — consolidated architecture and semantics
 
-### Decisions tried and reversed
+### Key reversals
 
-| Early idea | What changed | Why |
-|------------|--------------|-----|
-| Single global pole list indexed 0–4 | Per-player local poles 1–3 + internal string IDs | Matches the brief's player-centric view; keeps observations natural for agents. |
-| Raise on illegal moves | Return `legal=False`, advance turn | Brief says illegal actions waste the turn without changing state. |
-| Embed alternating A/B turn logic in `Game` | Turn order passed in at construction | Brief requires external turn sequences (RL schedulers, replay files). |
-| Rich text format with implicit turn order | Explicit `turn` line + optional per-move player prefix | Easier to validate replays; catches mismatched recordings early. |
-| Check win only for the acting player | Check both players after each legal move | Opponent could already satisfy win before their next explicit turn (edge case; cheap to scan). |
-
-### What I'd do with more time
-
-- Step log with action legality for replay debugging
-- Property-based tests for invariants (disk conservation, monotonic stacks)
-- Separate `Agent` protocol and a minimal greedy solver as a third frontend
+| Early idea | Final choice |
+|------------|--------------|
+| `act(engine, player)` | `act(observation, legal_actions)` — structural info boundary |
+| `Game` + monolithic `types.py` | `HanoiCrossingEngine` + `actions` / `models` split |
+| Win check for acting player only | Check both players; tie-break to acting player |
+| Raise on illegal moves | `valid=False`, advance turn (per brief) |
 
 ## AI disclosure
 
-This submission was built with **Cursor AI (Claude)** as a pair-programming
-assistant: scaffolding the `uv` project, drafting the engine and CLI,
-writing tests, and editing this README. Decisions in the tables above were
-reviewed and adjusted during that session (e.g. illegal-move semantics, turn
-order ownership).
+Built with **Cursor AI (Claude)** as a pair-programming assistant: scaffolding,
+engine, runner, agents, tests, CLI, and documentation.
 
 ## License
 
