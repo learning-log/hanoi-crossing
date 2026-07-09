@@ -24,12 +24,49 @@ def _validate_checkpoint(
     done: bool,
     winner: PlayerId | None,
 ) -> None:
+    """Validate turn metadata for checkpoint restore (not board content)."""
     if turn_index < 0:
         raise ValueError("turn_index must be >= 0")
     if winner is not None and not done:
         raise ValueError("winner requires done=True")
     if turn_order and not done and turn_index > len(turn_order):
         raise ValueError("turn_index past end of turn_order")
+
+
+_POLE_KEYS_ALL = ("1a", "1b", "2", "3a", "3b")
+
+
+def _normalize_poles(poles: dict[str, list[int]]) -> dict[str, list[int]]:
+    return {k: list(poles.get(k, [])) for k in _POLE_KEYS_ALL}
+
+
+def _collect_disks(state: BoardState) -> list[int]:
+    disks: list[int] = []
+    for key in _POLE_KEYS_ALL:
+        disks.extend(state.poles.get(key, []))
+    for player in ("A", "B"):
+        hand = state.hands.get(player)
+        if hand is not None:
+            disks.append(hand)
+    return disks
+
+
+def _validate_state_for_n(state: BoardState, n: int) -> None:
+    expected = set(range(1, 2 * n + 1))
+    disks = _collect_disks(state)
+    if len(disks) != len(set(disks)):
+        raise ValueError("duplicate disks on board")
+    actual = set(disks)
+    if actual != expected:
+        raise ValueError(
+            f"disk set {sorted(actual)} does not match n={n} "
+            f"(expected {sorted(expected)})"
+        )
+    for key in _POLE_KEYS_ALL:
+        stack = state.poles.get(key, [])
+        for i in range(len(stack) - 1):
+            if stack[i] <= stack[i + 1]:
+                raise ValueError(f"invalid stack order on pole {key}: {stack}")
 
 
 def _initial_poles(n: int) -> dict[str, list[int]]:
@@ -106,6 +143,9 @@ class HanoiCrossingEngine:
         _validate_checkpoint(self._turn_order, turn_index, done, winner)
         self._turn_index = turn_index
         self._state = state.copy() if state is not None else BoardState(poles=_initial_poles(n))
+        if state is not None:
+            self._state.poles = _normalize_poles(self._state.poles)
+            _validate_state_for_n(self._state, n)
         self._done = done
         self._winner = winner
         self._snapshot_cache: BoardSnapshot | None = None

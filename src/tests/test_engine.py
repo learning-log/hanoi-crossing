@@ -145,7 +145,7 @@ def test_engine_rejects_invalid_n():
 def test_opponent_win_detected_when_shared_pole_cleared():
     """A is already solved except shared pole 2; B clearing it ends the game."""
     state = BoardState(
-        poles={"1a": [], "1b": [4, 2], "2": [2], "3a": [3, 1], "3b": []},
+        poles={"1a": [], "1b": [4], "2": [2], "3a": [3, 1], "3b": []},
         hands={"A": None, "B": None},
     )
     engine = HanoiCrossingEngine(2, turn_order=["B"], state=state)
@@ -239,3 +239,40 @@ def test_engine_from_dict_round_trip():
 def test_restore_rejects_invalid_checkpoint():
     with pytest.raises(ValueError, match="winner requires done"):
         HanoiCrossingEngine(1, turn_order=["A"], done=False, winner="A")
+
+
+def test_rejects_state_wrong_disk_count_for_n():
+    state = BoardState(
+        poles={"1a": [1], "1b": [2], "2": [], "3a": [], "3b": []},
+        hands={"A": None, "B": None},
+    )
+    with pytest.raises(ValueError, match="does not match n=5"):
+        HanoiCrossingEngine(5, state=state)
+
+
+def test_rejects_state_duplicate_disk():
+    state = BoardState(
+        poles={"1a": [1, 1], "1b": [2], "2": [], "3a": [], "3b": []},
+        hands={"A": None, "B": None},
+    )
+    with pytest.raises(ValueError, match="duplicate disks"):
+        HanoiCrossingEngine(1, state=state)
+
+
+def test_rejects_state_invalid_stack_order():
+    state = BoardState(
+        poles={"1a": [1, 3], "1b": [4], "2": [2], "3a": [], "3b": []},
+        hands={"A": None, "B": None},
+    )
+    with pytest.raises(ValueError, match="invalid stack order"):
+        HanoiCrossingEngine(2, state=state)
+
+
+def test_from_dict_rejects_n_board_mismatch():
+    from hanoi_crossing.formatting import engine_from_dict, engine_to_dict
+
+    engine = HanoiCrossingEngine(1)
+    data = engine_to_dict(engine)
+    data["n"] = 5
+    with pytest.raises(ValueError, match="does not match n=5"):
+        engine_from_dict(data)

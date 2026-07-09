@@ -304,7 +304,7 @@ examples/          # Sample replay files
 |-----------------|---------------|
 | **RL training loop** | Implement `Agent`; call via `EpisodeRunner.run_agent` |
 | **Online service** | Serialize `Observation` + `legal_actions` in; `Action` out; `step` on server |
-| **Checkpoint / restore** | `engine.snapshot()` → `EngineSnapshot`; restore via `HanoiCrossingEngine.from_snapshot` or `engine_from_dict` / `engine_to_dict` in `formatting.py` (includes `turn_order`, `turn_index`, `done`, `winner`, board) |
+| **Checkpoint / restore** | `engine.snapshot()` → `EngineSnapshot`; restore via `HanoiCrossingEngine.from_snapshot` or `engine_from_dict` / `engine_to_dict` in `formatting.py` (includes `turn_order`, `turn_index`, `done`, `winner`, board). Board validated on ingest: disk set must match `n`, stacks must be strictly decreasing bottom-to-top. |
 | **New policy** | Subclass or implement `Agent.act(observation, legal_actions)` |
 | **Greedy solver** | New agent class; no engine changes |
 | **Concurrent games** | One `HanoiCrossingEngine` instance per game; runner is not shared |
