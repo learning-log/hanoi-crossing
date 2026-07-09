@@ -51,8 +51,11 @@ def _check_win(state: BoardState, player: PlayerId) -> bool:
 class HanoiCrossingEngine:
     """Environment core for Hanoi Crossing.
 
-    Agents interact via :meth:`observe`, :meth:`legal_actions`, and :meth:`step`.
-    Turn order is supplied externally and never inferred by the engine.
+    Orchestration (``EpisodeRunner``) calls :meth:`observe` and
+    :meth:`legal_actions`, passes that data to agents, then applies the chosen
+    action via :meth:`step`. Agents must not receive the engine handle — only
+    serialized observations and legal-action lists (matching a remote RL/service
+    boundary). Turn order is supplied externally and never inferred by the engine.
     """
 
     def __init__(

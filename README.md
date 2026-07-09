@@ -32,18 +32,22 @@ for B) or the opponent's hand.
 
 ## Design decisions
 
-### Engine API (RL / service ready)
+### Engine and agent API (RL / service ready)
 
-The `Game` class is the environment core. External agents (random player, RL
-policy, online service) interact only through:
+`HanoiCrossingEngine` is the environment core. **Agents** implement
+`act(observation, legal_actions) -> Action` — they receive only a player-local
+`Observation` and the legal action list, not the engine handle. This matches how
+a remote RL or LLM agent would consume the env over the wire.
 
-| Method | Purpose |
-|--------|---------|
-| `legal_actions()` | action mask for the current player |
-| `step(action)` | apply one turn; illegal moves waste the turn |
-| `observation(player)` | player-local partial view |
-| `snapshot()` | full state for logging / replay output |
-| `clone()` | copy for search or rollout |
+`EpisodeRunner` orchestrates: observe → agent.act → step. Full board state
+(`engine.state`) is for logging, CLI output, and tests only.
+
+| Engine method | Purpose |
+|---------------|---------|
+| `observe(player)` | player-local partial view |
+| `legal_actions(player)` | action mask for that player |
+| `step(player, action)` | apply one turn; illegal moves waste the turn |
+| `state` | full board snapshot (ops/logging, not for agents) |
 
 Turn order is **always supplied externally** — the engine never assumes
 alternating A/B play.

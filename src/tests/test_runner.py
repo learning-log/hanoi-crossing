@@ -71,6 +71,14 @@ def test_random_agent_via_runner():
     assert all(trace.legal_actions for trace in runner.traces)
 
 
+def test_agent_act_receives_observation_and_legal_actions():
+    engine = HanoiCrossingEngine(1, turn_order=["A"])
+    observation = engine.observe("A")
+    legal_actions = engine.legal_actions("A")
+    action = RandomAgent(__import__("random").Random(0)).act(observation, legal_actions)
+    assert action in legal_actions
+
+
 def test_scripted_agent_via_runner():
     engine = HanoiCrossingEngine(1, turn_order=["A", "A", "B"])
     runner = EpisodeRunner(engine)

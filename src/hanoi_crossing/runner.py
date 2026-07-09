@@ -73,7 +73,9 @@ class EpisodeRunner:
             if max_steps is not None and steps >= max_steps:
                 break
             player = self.engine.expected_player
-            action = agent.act(self.engine, player)
+            observation = self.engine.observe(player)
+            legal_actions = self.engine.legal_actions(player)
+            action = agent.act(observation, legal_actions)
             self.run_turn(player, action)
             steps += 1
         return self.engine.winner
